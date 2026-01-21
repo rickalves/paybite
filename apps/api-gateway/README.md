@@ -1,53 +1,115 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# API Gateway - IbiEats
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+O **API Gateway** é o ponto de entrada unificado do sistema IbiEats, implementado com **Arquitetura Orientada a Eventos (EDA)** e **Domain-Driven Design (DDD)**. Ele recebe requests HTTP, valida autenticação/autorização, transforma dados em comandos, aplica regras de negócio e publica eventos para comunicação assíncrona com outros microserviços via RabbitMQ.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Arquitetura e Padrões Aplicados
 
-## Description
+### Domain-Driven Design (DDD)
+- **Bounded Context**: "API de Entrada" - foco em validação inicial e publicação de eventos.
+- **Camadas**:
+  - **Domain**: Regras de negócio puras (entidades, value objects, serviços de domínio).
+  - **Application**: Casos de uso via CQRS (commands/queries e handlers).
+  - **Infrastructure**: Adapters externos (RabbitMQ, JWT).
+  - **Presentation**: Interfaces HTTP (controllers, DTOs, guards).
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+### Event-Driven Architecture (EDA)
+- Publica eventos (ex.: `OrderRequestedEvent`) para iniciar fluxos em outros serviços.
+- Usa RabbitMQ para mensageria assíncrona, reduzindo acoplamento.
 
-## Project setup
+### CQRS (Command Query Responsibility Segregation)
+- **Commands**: Ações que mudam estado (ex.: `CreateOrderCommand`).
+- **Handlers**: Implementam lógica de commands.
 
-```bash
-$ pnpm install
+## Estrutura de Pastas e Arquivos
+
+```
+src/
+├── main.ts                          # Bootstrap da aplicação NestJS
+├── app.module.ts                    # Módulo raiz com imports (CQRS, RabbitMQ, JWT)
+├── domain/                          # Camada de Domínio
+│   ├── entities/
+│   │   ├── order-request.entity.ts  # Entidade: OrderRequest (validações, regras)
+│   │   └── user.entity.ts           # Entidade: User (usuário autenticado)
+│   ├── value-objects/
+│   │   ├── order-item.vo.ts         # VO: OrderItem (imutável, validações)
+│   │   └── correlation-id.vo.ts     # VO: CorrelationId (rastreabilidade)
+│   ├── services/
+│   │   └── order-validation.service.ts # Serviço: valida regras globais
+│   └── events/
+│       └── order-requested.event.ts # Evento: OrderRequestedEvent (tipado com OrderItemEvent)
+├── application/                     # Camada de Aplicação
+│   ├── commands/
+│   │   └── create-order.command.ts  # Comando: CreateOrderCommand
+│   ├── handlers/
+│   │   └── create-order.handler.ts  # Handler: executa comando, publica evento
+│   └── dtos/
+│       └── create-order.dto.ts      # DTO interno: CreateOrderDto
+├── infrastructure/                  # Camada de Infraestrutura
+│   ├── messaging/rabbitmq/
+│   │   └── event-publisher.service.ts # Adapter: publica eventos no RabbitMQ
+│   └── auth/
+│       └── jwt.strategy.ts          # Adapter: valida JWT
+├── presentation/                    # Camada de Apresentação
+│   ├── controllers/
+│   │   ├── orders.controller.ts     # Controller: endpoint /orders (POST)
+│   │   └── auth.controller.ts       # Controller: endpoint /auth/login (POST)
+│   ├── dtos/
+│   │   └── create-order.request.dto.ts # DTO API: valida entrada HTTP
+│   └── guards/
+│       └── jwt-auth.guard.ts        # Guard: protege endpoints com JWT
+└── shared/                          # Código Compartilhado
+    └── constants/
+        └── rabbitmq.constants.ts    # Constantes: nomes de exchanges
 ```
 
-## Compile and run the project
+### Função de Cada Arquivo
+- **main.ts**: Inicializa o app, configura portas e middlewares.
+- **app.module.ts**: Configura módulos (CQRS, RabbitMQ, JWT) e providers.
+- **domain/entities/order-request.entity.ts**: Modelo de negócio com validações (ex.: pedido deve ter itens).
+- **domain/value-objects/order-item.vo.ts**: Objeto imutável para itens (ex.: quantidade > 0).
+- **domain/services/order-validation.service.ts**: Lógica de negócio não ligada a entidades (ex.: limite de itens).
+- **domain/events/order-requested.event.ts**: Contrato de evento para publicação.
+- **application/commands/create-order.command.ts**: Estrutura imutável para intenção de criar pedido.
+- **application/handlers/create-order.handler.ts**: Executa o comando: valida, cria entidade, publica evento.
+- **application/dtos/create-order.dto.ts**: Transfere dados entre camadas.
+- **infrastructure/messaging/rabbitmq/event-publisher.service.ts**: Publica eventos no RabbitMQ.
+- **infrastructure/auth/jwt.strategy.ts**: Valida tokens JWT para autenticação.
+- **presentation/controllers/orders.controller.ts**: Endpoint HTTP que recebe request e executa comando.
+- **presentation/dtos/create-order.request.dto.ts**: Valida entrada da API com decorators.
+- **presentation/guards/jwt-auth.guard.ts**: Protege rotas exigindo JWT válido.
+- **shared/constants/rabbitmq.constants.ts**: Constantes para configuração de mensageria.
 
+## Dependências Principais
+- `@nestjs/cqrs`: Para CQRS (commands e handlers).
+- `@golevelup/nestjs-rabbitmq`: Para integração com RabbitMQ (EDA).
+- `@nestjs/jwt` e `passport-jwt`: Para autenticação JWT.
+- `class-validator` e `class-transformer`: Para validação de DTOs.
+
+## Configuração de Paths (Aliases)
+O `tsconfig.json` define aliases para imports absolutos, facilitando a navegação:
+- `@domain/*` → `src/domain/*`
+- `@application/*` → `src/application/*`
+- `@infrastructure/*` → `src/infrastructure/*`
+- `@presentation/*` → `src/presentation/*`
+- `@shared/*` → `src/shared/*`
+
+Exemplo: `import { OrderRequest } from '@domain/entities/order-request.entity';`
+
+## Exemplo de Uso
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+curl -X POST http://localhost:3000/orders \
+  -H "Authorization: Bearer <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "uuid-user",
+    "items": [{"productId": "uuid-prod", "quantity": 2, "price": 10.0}],
+    "correlationId": "corr-123"
+  }'
 ```
+Isso publica um evento `OrderRequestedEvent` no RabbitMQ, iniciado o fluxo no Orders Service.
 
-## Run tests
-
-```bash
-# unit tests
+## Melhorias de Tipagem
+- Eventos de domínio usam tipos específicos (ex.: `OrderItemEvent`) em vez de `any` para maior segurança e manutenibilidade.
 $ pnpm run test
 
 # e2e tests
@@ -82,6 +144,22 @@ Check out a few resources that may come in handy when working with NestJS:
 - Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
 - To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
 - Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+
+## Configuração de Ambiente
+Copie `.env.example` para `.env` e configure:
+- `JWT_SECRET`: Chave secreta para JWT.
+- `RABBITMQ_URI`: URI do RabbitMQ.
+- `PORT`: Porta do serviço (padrão 3000).
+
+## Endpoints
+- `POST /auth/login`: Login simulado (retorna JWT). Body: `{ "username": "admin", "password": "password" }`
+- `POST /orders`: Cria pedido (requer JWT no header `Authorization: Bearer <token>`).
+
+## Como Executar
+1. Instale dependências: `pnpm install`
+2. Configure `.env` com variáveis necessárias.
+3. Execute: `pnpm run start:dev`
+4. Teste login e criação de pedidos.
 
 ## Support
 
