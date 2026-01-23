@@ -1,16 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
+import { EventPublisher } from '@ibieats/messaging';
 import {
   RABBITMQ_EXCHANGE,
   ORDER_REQUESTED_ROUTING_KEY,
-} from '@shared/constants/rabbitmq.constants';
+} from '@ibieats/shared';
 
 @Injectable()
 export class EventPublisherService {
-  constructor(private readonly amqpConnection: AmqpConnection) {}
+  constructor(private readonly eventPublisher: EventPublisher) {}
 
   async publish(event: unknown): Promise<void> {
-    await this.amqpConnection.publish(
+    await this.eventPublisher.publish(
       RABBITMQ_EXCHANGE,
       ORDER_REQUESTED_ROUTING_KEY,
       event,

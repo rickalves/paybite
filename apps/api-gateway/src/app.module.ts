@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
-import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
+import { AmqpConnection, RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
+import { EventPublisher } from '@ibieats/messaging';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { OrdersController } from '@presentation/controllers/orders.controller';
 import { AuthController } from '@presentation/controllers/auth.controller';
 import { CreateOrderHandler } from '@application/handlers/create-order.handler';
+import { JwtStrategy } from '@ibieats/auth';
 import { EventPublisherService } from '@infrastructure/messaging/rabbitmq/event-publisher.service';
-import { JwtStrategy } from '@infrastructure/auth/jwt.strategy';
-import { RABBITMQ_EXCHANGE } from '@shared/constants/rabbitmq.constants';
+import { RABBITMQ_EXCHANGE } from '@ibieats/shared';
 
 @Module({
   imports: [
@@ -21,6 +22,15 @@ import { RABBITMQ_EXCHANGE } from '@shared/constants/rabbitmq.constants';
     }),
   ],
   controllers: [OrdersController, AuthController],
-  providers: [CreateOrderHandler, EventPublisherService, JwtStrategy],
+  providers: [
+    CreateOrderHandler,
+    EventPublisherService,
+    JwtStrategy,
+    {
+      provide: EventPublisher,
+      useFactory: (conn: AmqpConnection) => new EventPublisher(conn),
+      inject: [AmqpConnection],
+    },
+  ],
 })
 export class AppModule {}
